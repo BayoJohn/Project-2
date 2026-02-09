@@ -22,9 +22,7 @@ services:
     restart: unless-stopped
 
   web:
-    # Use image from Docker Hub instead of building locally
     image: ${DOCKER_USERNAME:-yourusername}/ecommerce-platform:latest
-    # Fallback to build if image not available (for local development)
     build:
       context: .
       dockerfile: Dockerfile
@@ -64,6 +62,42 @@ services:
     networks:
       - ecommerce-network
 
+  # --- MONITORING SERVICES ---
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Change this in production!
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    expose:
+      - "9100"
+    networks:
+      - ecommerce-network
+
 networks:
   ecommerce-network:
     driver: bridge
@@ -72,3 +106,5 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  grafana_data:
