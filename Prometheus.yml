@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 15s
+
+scrape configs:
+ - job_name: "ecommerce-app"
+    static_configs:
+      - tragets:["app:300"]

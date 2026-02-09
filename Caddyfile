@@ -1,0 +1,48 @@
+# Simple reverse proxy with load balancing
+:80 {
+    # Round-robin load balancing across 3 replicas
+    reverse_proxy web:8000 {
+        # Load balancing policy
+        lb_policy round_robin
+        
+        # Health check
+        health_uri /api/products
+        health_interval 10s
+        health_timeout 5s
+        health_status 2xx
+        
+        # Fail timeout
+        fail_duration 30s
+        max_fails 3
+        unhealthy_status 5xx
+    }
+    
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+    
+    # Enable gzip compression
+    encode gzip
+    
+    # Add headers for security
+    header {
+        # Security headers
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# For production with domain name and auto HTTPS:
+# Replace example.com with your domain
+# example.com {
+#     reverse_proxy web:8000 {
+#         lb_policy round_robin
+#         health_uri /api/products
+#         health_interval 10s
+#     }
+#     encode gzip
+# }

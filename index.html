@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShopHub - Your Online Store</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">🛍️ ShopHub</div>
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search products..." onkeyup="searchProducts()">
+            </div>
+            <button class="cart-button" onclick="openCart()">
+                🛒 Cart
+                <span class="cart-count" id="cartCount">0</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="filters">
+        <button class="filter-btn active" onclick="filterByCategory('all')">All Products</button>
+        <button class="filter-btn" onclick="filterByCategory('Electronics')">Electronics</button>
+        <button class="filter-btn" onclick="filterByCategory('Fashion')">Fashion</button>
+        <button class="filter-btn" onclick="filterByCategory('Home')">Home</button>
+        <button class="filter-btn" onclick="filterByCategory('Fitness')">Fitness</button>
+        <button class="filter-btn" onclick="filterByCategory('Accessories')">Accessories</button>
+    </div>
+
+    <div class="products-container">
+        <div class="products-grid" id="productsGrid"></div>
+    </div>
+
+    <!-- Cart Modal -->
+    <div class="modal" id="cartModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Shopping Cart</h2>
+                <button class="close-btn" onclick="closeCart()">&times;</button>
+            </div>
+            <div id="cartItems"></div>
+            <div class="cart-total" id="cartTotal"></div>
+            <div id="checkoutSection"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
