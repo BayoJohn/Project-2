@@ -1,0 +1,68 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          # Create SSH directory and add key
+          mkdir -p ~/.ssh
+          echo "$PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          # Add EC2 to known hosts
+          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
+          
+          # Deploy to EC2
+          ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
+            # Navigate to app directory (create if doesn't exist)
+            mkdir -p ~/ecommerce-platform
+            cd ~/ecommerce-platform
+            
+            # Pull latest code
+            if [ -d .git ]; then
+              git pull origin main
+            else
+              git clone https://github.com/${{ github.repository }} .
+            fi
+            
+            # Stop existing containers
+            docker-compose down
+            
+            # Rebuild and start containers
+            docker-compose build --no-cache
+            docker-compose up -d --scale web=3
+            
+            # Clean up unused images
+            docker system prune -f
+            
+            # Show status
+            docker-compose ps
+          EOF
+
+      - name: Verify Deployment
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          # Wait for services to start
+          sleep 30
+          
+          # Check if site is responding
+          curl -f http://$HOST/api/products || exit 1
+          
+          echo "Deployment successful! Site is live at http://$HOST"
