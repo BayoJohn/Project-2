@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Build and Deploy to EC2
 
 on:
   push:
@@ -7,7 +7,43 @@ on:
   workflow_dispatch:
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/ecommerce-platform
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/ecommerce-platform:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/ecommerce-platform:buildcache,mode=max
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     
     steps:
@@ -19,6 +55,7 @@ jobs:
           PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
           # Create SSH directory and add key
           mkdir -p ~/.ssh
@@ -29,30 +66,37 @@ jobs:
           ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
           
           # Deploy to EC2
-          ssh -i ~/.ssh/deploy_key $USER@$HOST << 'EOF'
-            # Navigate to app directory (create if doesn't exist)
+          ssh -i ~/.ssh/deploy_key $USER@$HOST << EOF
+            # Navigate to app directory
             mkdir -p ~/ecommerce-platform
             cd ~/ecommerce-platform
             
-            # Pull latest code
+            # Pull latest code (for docker-compose.yml and other files)
             if [ -d .git ]; then
               git pull origin main
             else
               git clone https://github.com/${{ github.repository }} .
             fi
             
+            # Log in to Docker Hub on EC2
+            echo "${{ secrets.DOCKER_TOKEN }}" | docker login -u "$DOCKER_USERNAME" --password-stdin
+            
+            # Pull latest image from Docker Hub
+            docker pull $DOCKER_USERNAME/ecommerce-platform:latest
+            
             # Stop existing containers
             docker-compose down
             
-            # Rebuild and start containers
-            docker-compose build --no-cache
+            # Start containers with pulled image
             docker-compose up -d --scale web=3
             
-            # Clean up unused images
-            docker system prune -f
+            # Clean up old images
+            docker image prune -af
             
             # Show status
             docker-compose ps
+            
+            echo "Deployment completed successfully!"
           EOF
 
       - name: Verify Deployment
@@ -60,9 +104,17 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
         run: |
           # Wait for services to start
+          echo "Waiting for services to start..."
           sleep 30
           
           # Check if site is responding
-          curl -f http://$HOST/api/products || exit 1
+          echo "Testing API endpoint..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://$HOST/api/products)
           
-          echo "Deployment successful! Site is live at http://$HOST"
+          if [ $response -eq 200 ]; then
+            echo "✅ Deployment successful!"
+            echo "🌐 Site is live at http://$HOST"
+          else
+            echo "❌ Deployment verification failed. HTTP status: $response"
+            exit 1
+          fi
